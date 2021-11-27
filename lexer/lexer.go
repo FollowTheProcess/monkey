@@ -1,3 +1,4 @@
+// Package lexer implements the Monkey semantic Tokens and Lexer
 package lexer
 
 import (
@@ -44,6 +45,17 @@ func (l *Lexer) readChar() {
 	l.readPosition += 1
 }
 
+// peekChar returns the character at l.readPosition
+// i.e. it lets us look ahead by 1 character so we can detect
+// things like == and !=
+func (l *Lexer) peekChar() rune {
+	if l.readPosition >= l.input.RuneCount() {
+		return 0
+	}
+
+	return l.input.At(l.readPosition)
+}
+
 // NextToken looks at the current character under examination, emits the appropriate Token
 // and reads the next character (thus advancing the indexes)
 // If 0 is found, will emit an EOF
@@ -53,17 +65,45 @@ func (l *Lexer) NextToken() Token {
 
 	switch l.ch {
 	case '=':
-		token = newToken(ASSIGN, l.ch)
+		// Look ahead to see if we have a '=='
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			token = Token{Type: EQ, Literal: string(ch) + string(l.ch)}
+		} else {
+			// If not, must just be a normal '='
+			token = newToken(ASSIGN, l.ch)
+		}
+	case '+':
+		token = newToken(PLUS, l.ch)
+	case '-':
+		token = newToken(MINUS, l.ch)
+	case '!':
+		// Look ahead to see if we have a '!='
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			token = Token{Type: NOTEQ, Literal: string(ch) + string(l.ch)}
+		} else {
+			// If not, must just be a normal '!'
+			token = newToken(BANG, l.ch)
+		}
+	case '*':
+		token = newToken(ASTERISK, l.ch)
+	case '/':
+		token = newToken(SLASH, l.ch)
+	case '<':
+		token = newToken(LT, l.ch)
+	case '>':
+		token = newToken(GT, l.ch)
 	case ';':
 		token = newToken(SEMICOLON, l.ch)
+	case ',':
+		token = newToken(COMMA, l.ch)
 	case '(':
 		token = newToken(LPAREN, l.ch)
 	case ')':
 		token = newToken(RPAREN, l.ch)
-	case ',':
-		token = newToken(COMMA, l.ch)
-	case '+':
-		token = newToken(PLUS, l.ch)
 	case '{':
 		token = newToken(LBRACE, l.ch)
 	case '}':
@@ -109,6 +149,9 @@ func (l *Lexer) readIdentifier() string {
 	return l.input.Slice(position, l.position)
 }
 
+// readNumber reads l.ch so long as it a valid digit
+// and advances the index until it reaches a non-digit character
+// upon which it will return the string of valid digits
 func (l *Lexer) readNumber() string {
 	position := l.position
 	for unicode.IsDigit(l.ch) {

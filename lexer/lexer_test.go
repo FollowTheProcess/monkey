@@ -11,6 +11,17 @@ func TestNextToken(t *testing.T) {
 	};
 	
 	let result = add(five, ten);
+	!-/*5;
+	5 < 10 > 5;
+
+	if (5 < 10) {
+		return true;
+	} else {
+		return false;
+	}
+
+	10 == 10;
+	10 != 9;
 	`
 
 	tests := []struct {
@@ -52,6 +63,43 @@ func TestNextToken(t *testing.T) {
 		{COMMA, ","},
 		{IDENT, "ten"},
 		{RPAREN, ")"},
+		{SEMICOLON, ";"},
+		{BANG, "!"},
+		{MINUS, "-"},
+		{SLASH, "/"},
+		{ASTERISK, "*"},
+		{INT, "5"},
+		{SEMICOLON, ";"},
+		{INT, "5"},
+		{LT, "<"},
+		{INT, "10"},
+		{GT, ">"},
+		{INT, "5"},
+		{SEMICOLON, ";"},
+		{IF, "if"},
+		{LPAREN, "("},
+		{INT, "5"},
+		{LT, "<"},
+		{INT, "10"},
+		{RPAREN, ")"},
+		{LBRACE, "{"},
+		{RETURN, "return"},
+		{TRUE, "true"},
+		{SEMICOLON, ";"},
+		{RBRACE, "}"},
+		{ELSE, "else"},
+		{LBRACE, "{"},
+		{RETURN, "return"},
+		{FALSE, "false"},
+		{SEMICOLON, ";"},
+		{RBRACE, "}"},
+		{INT, "10"},
+		{EQ, "=="},
+		{INT, "10"},
+		{SEMICOLON, ";"},
+		{INT, "10"},
+		{NOTEQ, "!="},
+		{INT, "9"},
 		{SEMICOLON, ";"},
 		{EOF, ""},
 	}
