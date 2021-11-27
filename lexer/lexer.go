@@ -1,6 +1,10 @@
 package lexer
 
-import "golang.org/x/exp/utf8string"
+import (
+	"unicode"
+
+	"golang.org/x/exp/utf8string"
+)
 
 // Lexer is our semantic Lexer, it proceeds character by character emitting
 // semantic Tokens as it sees them
@@ -45,6 +49,7 @@ func (l *Lexer) readChar() {
 // If 0 is found, will emit an EOF
 func (l *Lexer) NextToken() Token {
 	var token Token
+	l.skipWhiteSpace()
 
 	switch l.ch {
 	case '=':
@@ -66,10 +71,58 @@ func (l *Lexer) NextToken() Token {
 	case 0:
 		token.Literal = ""
 		token.Type = EOF
+	default:
+		switch {
+		case unicode.IsLetter(l.ch):
+			token.Literal = l.readIdentifier()
+			token.Type = LookupIdent(token.Literal)
+			// Early return as readIdentifier calls readChar repeatedly
+			// so it does not need to be called again later
+			return token
+
+		case unicode.IsDigit(l.ch):
+			token.Literal = l.readNumber()
+			token.Type = INT
+			// Another early return as readNumber will also repeatedly call
+			// readChar
+			return token
+
+		default:
+			token = newToken(ILLEGAL, l.ch)
+		}
 	}
 
 	l.readChar()
 	return token
+}
+
+// readIdentifier reads l.ch so long as it is a valid utf-8 letter
+// and advances the index until it reaches a non-letter character
+// upon which it will return the string of valid letters i.e. the identifier
+// it's just read
+func (l *Lexer) readIdentifier() string {
+	position := l.position
+	for unicode.IsLetter(l.ch) {
+		l.readChar()
+	}
+
+	return l.input.Slice(position, l.position)
+}
+
+func (l *Lexer) readNumber() string {
+	position := l.position
+	for unicode.IsDigit(l.ch) {
+		l.readChar()
+	}
+
+	return l.input.Slice(position, l.position)
+}
+
+// skipWhiteSpace allows us to easily skip all whitespace characters
+func (l *Lexer) skipWhiteSpace() {
+	for unicode.IsSpace(l.ch) {
+		l.readChar()
+	}
 }
 
 // newToken constructs and returns a Token
