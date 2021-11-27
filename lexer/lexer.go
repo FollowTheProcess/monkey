@@ -1,23 +1,32 @@
 package lexer
 
+import "golang.org/x/exp/utf8string"
+
+// Lexer is our semantic Lexer, it proceeds character by character emitting
+// semantic Tokens as it sees them
+// It is identical to the one in the book other than I have tried to make it
+// support UTF-8
 type Lexer struct {
-	input        string
-	position     int  // Current position in input (points to current char)
-	readPosition int  // Current reading position (points to next char)
-	ch           byte // Current char under examination
+	input        *utf8string.String // So we can support UTF-8
+	position     int                // Current position in input (points to current char)
+	readPosition int                // Current reading position (points to next char)
+	ch           rune               // Current char under examination
 }
 
+// New constructs and returns a new Lexer and initialises
+// it by reading the first character
 func New(input string) *Lexer {
-	l := &Lexer{input: input}
+	l := &Lexer{input: utf8string.NewString(input)}
 	l.readChar()
 	return l
 }
 
+// readChar
 func (l *Lexer) readChar() {
-	if l.readPosition >= len(l.input) {
+	if l.readPosition >= l.input.RuneCount() {
 		l.ch = 0
 	} else {
-		l.ch = l.input[l.readPosition]
+		l.ch = l.input.At(l.readPosition)
 	}
 
 	l.position = l.readPosition
@@ -53,6 +62,6 @@ func (l *Lexer) NextToken() Token {
 	return token
 }
 
-func newToken(t TokenType, ch byte) Token {
+func newToken(t TokenType, ch rune) Token {
 	return Token{Type: t, Literal: string(ch)}
 }
