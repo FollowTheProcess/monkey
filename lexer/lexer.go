@@ -21,18 +21,28 @@ func New(input string) *Lexer {
 	return l
 }
 
-// readChar
+// readChar reads the next character in the input stream
+// and advances our position markers
+// If we have not read anything or we are at the end of the input
+// it will set the current character to 0 (ASCII "NUL")
 func (l *Lexer) readChar() {
 	if l.readPosition >= l.input.RuneCount() {
+		// Nothing to do, set to 0
 		l.ch = 0
 	} else {
+		// Grab the character at the readPosition and store it
+		// in l.ch
 		l.ch = l.input.At(l.readPosition)
 	}
 
+	// Advance the indexes
 	l.position = l.readPosition
 	l.readPosition += 1
 }
 
+// NextToken looks at the current character under examination, emits the appropriate Token
+// and reads the next character (thus advancing the indexes)
+// If 0 is found, will emit an EOF
 func (l *Lexer) NextToken() Token {
 	var token Token
 
@@ -62,6 +72,7 @@ func (l *Lexer) NextToken() Token {
 	return token
 }
 
+// newToken constructs and returns a Token
 func newToken(t TokenType, ch rune) Token {
 	return Token{Type: t, Literal: string(ch)}
 }
