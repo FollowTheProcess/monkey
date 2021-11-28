@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/FollowTheProcess/monkey/ast"
@@ -131,6 +132,45 @@ func TestIntegerLiteralExpression(t *testing.T) {
 	}
 }
 
+func TestParsingPrefixExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		operator string
+		value    int
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for _, tt := range tests {
+		lex := lexer.New(tt.input)
+		p := New(lex)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("wrong number of statements, got %d, wanted %d", len(program.Statements), 1)
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("statement is not an ExpressionStatement, got %T", program.Statements[0])
+		}
+
+		exp, ok := stmt.Expression.(*ast.PrefixExpression)
+		if !ok {
+			t.Fatalf("statement is not a PrefixExpression, got %T", stmt.Expression)
+		}
+
+		if exp.Operator != tt.operator {
+			t.Fatalf("wrong operator, got %s, wanted %s", exp.Operator, tt.operator)
+		}
+
+		assertIntegerLiteral(t, exp.Right, tt.value)
+
+	}
+}
+
 func assertLetStatement(t *testing.T, stmt ast.Statement, expectedIdent string) {
 	t.Helper()
 	if stmt.TokenLiteral() != "let" {
@@ -148,6 +188,23 @@ func assertLetStatement(t *testing.T, stmt ast.Statement, expectedIdent string) 
 
 	if letStmt.Name.TokenLiteral() != expectedIdent {
 		t.Errorf("statement name not %q, got %q", expectedIdent, letStmt.Name.TokenLiteral())
+	}
+}
+
+func assertIntegerLiteral(t *testing.T, il ast.Expression, value int) {
+	t.Helper()
+
+	i, ok := il.(*ast.IntegerLiteral)
+	if !ok {
+		t.Errorf("not an *ast.IntegerLiteral, got %T", il)
+	}
+
+	if i.Value != value {
+		t.Errorf("wrong integer value, got %d, wanted %d", i.Value, value)
+	}
+
+	if i.TokenLiteral() != fmt.Sprintf("%d", value) {
+		t.Errorf("wrong TokenLiteral, got %s, wanted %s", i.TokenLiteral(), fmt.Sprintf("%d", value))
 	}
 }
 
