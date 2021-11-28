@@ -131,3 +131,12 @@ func (es *ExpressionStatement) String() string {
 	}
 	return ""
 }
+
+type IntegerLiteral struct {
+	Token lexer.Token
+	Value int
+}
+
+func (il *IntegerLiteral) expressionNode()      {}
+func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
+func (il *IntegerLiteral) String() string       { return il.Token.Literal }

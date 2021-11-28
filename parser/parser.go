@@ -4,6 +4,7 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/FollowTheProcess/monkey/ast"
 	"github.com/FollowTheProcess/monkey/lexer"
@@ -46,6 +47,7 @@ func New(l *lexer.Lexer) *Parser {
 
 	p.prefixParseFns = make(map[lexer.TokenType]prefixParseFn)
 	p.registerPrefix(lexer.IDENT, p.parseIdentifier)
+	p.registerPrefix(lexer.INT, p.parseIntegerLiteral)
 
 	// Read two tokens so currentToken and peekToken are both set
 	p.nextToken()
@@ -185,6 +187,22 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	}
 
 	return stmt
+}
+
+// parseIntegerLiteral handles the conversion to a native integer and returns
+// the ast node
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	lit := &ast.IntegerLiteral{Token: p.currentToken}
+
+	value, err := strconv.Atoi(p.currentToken.Literal)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.currentToken.Literal)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	lit.Value = value
+	return lit
 }
 
 // expectPeek checks if the peek (next) token is of type 't'
