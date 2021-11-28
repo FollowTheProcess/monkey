@@ -1,11 +1,16 @@
 // Package ast implements the Abstract Syntax Tree for Monkey
 package ast
 
-import "github.com/FollowTheProcess/monkey/lexer"
+import (
+	"bytes"
+
+	"github.com/FollowTheProcess/monkey/lexer"
+)
 
 // Node represents a generic AST node
 type Node interface {
 	TokenLiteral() string
+	String() string
 }
 
 // Statement represents a statement, i.e. a piece of syntax
@@ -29,6 +34,16 @@ type Program struct {
 	Statements []Statement
 }
 
+func (p *Program) String() string {
+	var out bytes.Buffer
+
+	for _, s := range p.Statements {
+		out.WriteString(s.String())
+	}
+
+	return out.String()
+}
+
 // TokenLiteral satisfies the ast.Node interface for our Program
 func (p *Program) TokenLiteral() string {
 	if len(p.Statements) > 0 {
@@ -47,6 +62,22 @@ type LetStatement struct {
 func (ls *LetStatement) statementNode()       {}
 func (ls *LetStatement) TokenLiteral() string { return ls.Token.Literal }
 
+func (ls *LetStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(ls.TokenLiteral() + " ")
+	out.WriteString(ls.Name.String())
+	out.WriteString(" = ")
+
+	if ls.Value != nil {
+		out.WriteString(ls.Value.String())
+	}
+
+	out.WriteString(";")
+
+	return out.String()
+}
+
 // Identifier refers to a variable assignment
 // e.g. 'x = 5;'
 type Identifier struct {
@@ -57,6 +88,10 @@ type Identifier struct {
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
 
+func (i *Identifier) String() string {
+	return i.Value
+}
+
 // ReturnStatement is our object responsible for e.g. 'return true'
 type ReturnStatement struct {
 	Token       lexer.Token // The 'RETURN' token
@@ -65,3 +100,34 @@ type ReturnStatement struct {
 
 func (rs *ReturnStatement) statementNode()       {}
 func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
+
+func (rs *ReturnStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(rs.TokenLiteral() + " ")
+
+	if rs.ReturnValue != nil {
+		out.WriteString(rs.ReturnValue.String())
+	}
+
+	out.WriteString(";")
+
+	return out.String()
+}
+
+// ExpressionStatement is our object responsible for e.g. 'x = 5;'
+// being a valid statement
+type ExpressionStatement struct {
+	Token      lexer.Token // The first token of the expression
+	Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode()       {}
+func (es *ExpressionStatement) TokenLiteral() string { return es.Token.Literal }
+
+func (es *ExpressionStatement) String() string {
+	if es.Expression != nil {
+		return es.Expression.String()
+	}
+	return ""
+}

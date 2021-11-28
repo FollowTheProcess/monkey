@@ -9,6 +9,22 @@ import (
 	"github.com/FollowTheProcess/monkey/lexer"
 )
 
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // > or <
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -x or !x
+	CALL        // myFunction(x)
+)
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
+
 // Parser is our parser, it contains a lexer and fields to track
 // the current and next tokens as emitted from the lexer
 type Parser struct {
@@ -16,6 +32,9 @@ type Parser struct {
 	currentToken lexer.Token
 	peekToken    lexer.Token
 	errors       []string
+
+	prefixParseFns map[lexer.TokenType]prefixParseFn
+	infixParseFns  map[lexer.TokenType]infixParseFn
 }
 
 // New constructs and returns a new parser
@@ -25,11 +44,26 @@ func New(l *lexer.Lexer) *Parser {
 		errors: []string{},
 	}
 
+	p.prefixParseFns = make(map[lexer.TokenType]prefixParseFn)
+	p.registerPrefix(lexer.IDENT, p.parseIdentifier)
+
 	// Read two tokens so currentToken and peekToken are both set
 	p.nextToken()
 	p.nextToken()
 
 	return p
+}
+
+// registerPrefix takes a TokenType and a function to parse it
+// it then adds these entries to the map of prefix parsing functions in the Parser
+func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+// registerInfix takes a TokenType and a function to parse it
+// it then adds these entires to the map of infix parsing functions in the Parser
+func (p *Parser) registerInfix(tokenType lexer.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
 }
 
 // Errors returns a list of all parsing errors
@@ -56,9 +90,8 @@ func (p *Parser) ParseProgram() *ast.Program {
 	// until we reach an EOF
 	for !p.currentToken.Is(lexer.EOF) {
 		stmt := p.parseStatement()
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-		}
+		program.Statements = append(program.Statements, stmt)
+
 		p.nextToken()
 	}
 
@@ -74,8 +107,27 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.RETURN:
 		return p.parseReturnStatement()
 	default:
+		// Everything else is an expression
+		return p.parseExpressionStatement()
+	}
+}
+
+// parseExpression is a helper that will parse the current expression
+// e.g. 'x + 5'
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParseFns[p.currentToken.Type]
+	if prefix == nil {
 		return nil
 	}
+
+	leftExp := prefix()
+
+	return leftExp
+}
+
+// parseIdentifier is a helper that will parse the current identifier
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 }
 
 // parseLetStatement should be called on the 'let' branch of the main parser switch statement
@@ -116,6 +168,19 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 	// TODO: Skip expressions until we encounter a semicolon
 	for !p.currentToken.Is(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+// parseExpressionStatement handles e.g. '5 + 5'
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currentToken}
+
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekToken.Is(lexer.SEMICOLON) {
 		p.nextToken()
 	}
 
