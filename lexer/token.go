@@ -47,6 +47,11 @@ type Token struct {
 	Literal string    // The token's literal string value
 }
 
+// Is returns whether or not the calling Token is of type 'tokenType'
+func (t Token) Is(tokenType TokenType) bool {
+	return t.Type == tokenType
+}
+
 // keywords are the monkey keywords mapped to their Tokens
 var keywords = map[string]TokenType{
 	"fn":     FUNCTION,
