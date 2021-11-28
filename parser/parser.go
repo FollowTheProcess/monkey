@@ -71,6 +71,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case lexer.LET:
 		return p.parseLetStatement()
+	case lexer.RETURN:
+		return p.parseReturnStatement()
 	default:
 		return nil
 	}
@@ -99,6 +101,20 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 
 	// TODO: We're skipping the expressions until we encounter a semicolon
 	// this will get fixed once we know how to parse expressions
+	for !p.currentToken.Is(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+// parseReturnStatement handles e.g. 'return true'
+func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
+	stmt := &ast.ReturnStatement{Token: p.currentToken}
+
+	p.nextToken()
+
+	// TODO: Skip expressions until we encounter a semicolon
 	for !p.currentToken.Is(lexer.SEMICOLON) {
 		p.nextToken()
 	}
