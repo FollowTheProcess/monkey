@@ -1,5 +1,3 @@
-// Package parser implements the recursive descent, 'Pratt' parser for
-// the Monkey programming language
 package parser
 
 import (
@@ -17,11 +15,10 @@ const (
 	LESSGREATER // > or <
 	SUM         // +
 	PRODUCT     // *
-	PREFIX      // -x or !x
-	CALL        // myFunction(x)
+	PREFIX      // -X or !X
+	CALL        // myFunction(X)
 )
 
-// operator precedences mapped to their lexical tokens
 var precedences = map[lexer.TokenType]int{
 	lexer.EQ:       EQUALS,
 	lexer.NOTEQ:    EQUALS,
@@ -31,6 +28,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.MINUS:    SUM,
 	lexer.SLASH:    PRODUCT,
 	lexer.ASTERISK: PRODUCT,
+	lexer.LPAREN:   CALL,
 }
 
 type (
@@ -38,33 +36,32 @@ type (
 	infixParseFn  func(ast.Expression) ast.Expression
 )
 
-// Parser is our parser, it contains a lexer and fields to track
-// the current and next tokens as emitted from the lexer
 type Parser struct {
-	l            *lexer.Lexer
+	l      *lexer.Lexer
+	errors []string
+
 	currentToken lexer.Token
 	peekToken    lexer.Token
-	errors       []string
 
 	prefixParseFns map[lexer.TokenType]prefixParseFn
 	infixParseFns  map[lexer.TokenType]infixParseFn
 }
 
-// New constructs and returns a new parser
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
 		errors: []string{},
 	}
 
-	// Prefix parsing functions
 	p.prefixParseFns = make(map[lexer.TokenType]prefixParseFn)
 	p.registerPrefix(lexer.IDENT, p.parseIdentifier)
 	p.registerPrefix(lexer.INT, p.parseIntegerLiteral)
 	p.registerPrefix(lexer.BANG, p.parsePrefixExpression)
 	p.registerPrefix(lexer.MINUS, p.parsePrefixExpression)
+	p.registerPrefix(lexer.TRUE, p.parseBoolean)
+	p.registerPrefix(lexer.FALSE, p.parseBoolean)
+	p.registerPrefix(lexer.LPAREN, p.parseGroupedExpression)
 
-	// Infix parsing functions
 	p.infixParseFns = make(map[lexer.TokenType]infixParseFn)
 	p.registerInfix(lexer.PLUS, p.parseInfixExpression)
 	p.registerInfix(lexer.MINUS, p.parseInfixExpression)
@@ -75,84 +72,58 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.LT, p.parseInfixExpression)
 	p.registerInfix(lexer.GT, p.parseInfixExpression)
 
-	// Read two tokens so currentToken and peekToken are both set
+	// Read two tokens, so currentToken and peekToken are both set
 	p.nextToken()
 	p.nextToken()
 
 	return p
 }
 
-// peekPrecedence returns the operator precedence of the next token
-// or LOWEST if not found
-func (p *Parser) peekPrecedence() int {
-	if prec, ok := precedences[p.peekToken.Type]; ok {
-		return prec
+func (p *Parser) nextToken() {
+	p.currentToken = p.peekToken
+	p.peekToken = p.l.NextToken()
+}
+
+func (p *Parser) expectPeek(t lexer.TokenType) bool {
+	if p.peekToken.Is(t) {
+		p.nextToken()
+		return true
+	} else {
+		p.peekError(t)
+		return false
 	}
-
-	return LOWEST
 }
 
-// currentPrecedence returns the operator precedence of the current token
-// or LOWEST if not found
-func (p *Parser) currentPrecedence() int {
-	if prec, ok := precedences[p.currentToken.Type]; ok {
-		return prec
-	}
-
-	return LOWEST
-}
-
-// registerPrefix takes a TokenType and a function to parse it
-// it then adds these entries to the map of prefix parsing functions in the Parser
-func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
-	p.prefixParseFns[tokenType] = fn
-}
-
-// registerInfix takes a TokenType and a function to parse it
-// it then adds these entires to the map of infix parsing functions in the Parser
-func (p *Parser) registerInfix(tokenType lexer.TokenType, fn infixParseFn) {
-	p.infixParseFns[tokenType] = fn
-}
-
-func (p *Parser) noPrefixParseFnError(t lexer.TokenType) {
-	msg := fmt.Sprintf("no prefix parse function found for %s", t)
-	p.errors = append(p.errors, msg)
-}
-
-// Errors returns a list of all parsing errors
-// no errors will return an empty slice
 func (p *Parser) Errors() []string {
 	return p.errors
 }
 
-// nextToken sets the internal token state of the parser
-// to reflext the next tokenised state as emitted from the lexer
-func (p *Parser) nextToken() {
-	// Set current token to the last token emitted from the lexer
-	p.currentToken = p.peekToken
-	// Get a new token from the lexer and set the new peek to that
-	p.peekToken = p.l.NextToken()
+func (p *Parser) peekError(t lexer.TokenType) {
+	msg := fmt.Sprintf("expected next lexer to be %s, got %s instead",
+		t, p.peekToken.Type)
+	p.errors = append(p.errors, msg)
 }
 
-// ParseProgram is the entry point to the parser
+func (p *Parser) noPrefixParseFnError(t lexer.TokenType) {
+	msg := fmt.Sprintf("no prefix parse function for %s found", t)
+	p.errors = append(p.errors, msg)
+}
+
 func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
 	program.Statements = []ast.Statement{}
 
-	// Parse the current token and keep getting new tokens
-	// until we reach an EOF
 	for !p.currentToken.Is(lexer.EOF) {
 		stmt := p.parseStatement()
-		program.Statements = append(program.Statements, stmt)
-
+		if stmt != nil {
+			program.Statements = append(program.Statements, stmt)
+		}
 		p.nextToken()
 	}
 
 	return program
 }
 
-// parseStatement is a helper that will parse the current statement
-// depending on what type of statement it is
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case lexer.LET:
@@ -160,20 +131,66 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.RETURN:
 		return p.parseReturnStatement()
 	default:
-		// Everything else is an expression
 		return p.parseExpressionStatement()
 	}
 }
 
-// parseExpression is a helper that will parse the current expression
-// e.g. 'x + 5'
+func (p *Parser) parseLetStatement() *ast.LetStatement {
+	stmt := &ast.LetStatement{Token: p.currentToken}
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+
+	stmt.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+
+	if !p.expectPeek(lexer.ASSIGN) {
+		return nil
+	}
+
+	p.nextToken()
+
+	stmt.Value = p.parseExpression(LOWEST)
+
+	if p.peekToken.Is(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
+	stmt := &ast.ReturnStatement{Token: p.currentToken}
+
+	p.nextToken()
+
+	stmt.ReturnValue = p.parseExpression(LOWEST)
+
+	if p.peekToken.Is(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currentToken}
+
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekToken.Is(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFns[p.currentToken.Type]
 	if prefix == nil {
 		p.noPrefixParseFnError(p.currentToken.Type)
 		return nil
 	}
-
 	leftExp := prefix()
 
 	for !p.peekToken.Is(lexer.SEMICOLON) && precedence < p.peekPrecedence() {
@@ -190,70 +207,26 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	return leftExp
 }
 
-// parseIdentifier is a helper that will parse the current identifier
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precedences[p.peekToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+func (p *Parser) curPrecedence() int {
+	if p, ok := precedences[p.currentToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 }
 
-// parseLetStatement should be called on the 'let' branch of the main parser switch statement
-// It will return nil if the statement is not of the correct form
-// e.g. 'let x = 5;'
-func (p *Parser) parseLetStatement() *ast.LetStatement {
-	// Construct the LetStatement AST node with the token we're currently sitting on
-	stmt := &ast.LetStatement{Token: p.currentToken}
-
-	// First we expect the next token to be an IDENT
-	// e.g. 'x'
-	if !p.expectPeek(lexer.IDENT) {
-		return nil
-	}
-
-	// Now we know we have an Identifier, construct the node
-	stmt.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
-
-	// The next thing to expect is an ASSIGN '='
-	if !p.expectPeek(lexer.ASSIGN) {
-		return nil
-	}
-
-	// TODO: We're skipping the expressions until we encounter a semicolon
-	// this will get fixed once we know how to parse expressions
-	for !p.currentToken.Is(lexer.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
-}
-
-// parseReturnStatement handles e.g. 'return true'
-func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
-	stmt := &ast.ReturnStatement{Token: p.currentToken}
-
-	p.nextToken()
-
-	// TODO: Skip expressions until we encounter a semicolon
-	for !p.currentToken.Is(lexer.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
-}
-
-// parseExpressionStatement handles e.g. '5 + 5'
-func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
-	stmt := &ast.ExpressionStatement{Token: p.currentToken}
-
-	stmt.Expression = p.parseExpression(LOWEST)
-
-	if p.peekToken.Is(lexer.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
-}
-
-// parseIntegerLiteral handles the conversion to a native integer and returns
-// the ast node
 func (p *Parser) parseIntegerLiteral() ast.Expression {
 	lit := &ast.IntegerLiteral{Token: p.currentToken}
 
@@ -265,10 +238,10 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	}
 
 	lit.Value = value
+
 	return lit
 }
 
-// parsePrefixExpression is a helper that parses e.g. '!true;'
 func (p *Parser) parsePrefixExpression() ast.Expression {
 	expression := &ast.PrefixExpression{
 		Token:    p.currentToken,
@@ -282,7 +255,6 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	return expression
 }
 
-// parseInfixExpression is a helper that parses e.g. '5 + 5;'
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	expression := &ast.InfixExpression{
 		Token:    p.currentToken,
@@ -290,29 +262,33 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 		Left:     left,
 	}
 
-	precedence := p.currentPrecedence()
+	precedence := p.curPrecedence()
 	p.nextToken()
 	expression.Right = p.parseExpression(precedence)
 
 	return expression
 }
 
-// expectPeek checks if the peek (next) token is of type 't'
-// if it is, it will advance the token and return true
-// else return false
-func (p *Parser) expectPeek(t lexer.TokenType) bool {
-	if p.peekToken.Is(t) {
-		p.nextToken()
-		return true
-	}
-
-	p.peekError(t)
-	return false
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{Token: p.currentToken, Value: p.currentToken.Is(lexer.TRUE)}
 }
 
-// peekError adds an error to the list of parser errors when the peeked
-// token is not of the correct type
-func (p *Parser) peekError(t lexer.TokenType) {
-	msg := fmt.Sprintf("expected next token to be %s, got %s", t, p.peekToken.Type)
-	p.errors = append(p.errors, msg)
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+
+	exp := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.RPAREN) {
+		return nil
+	}
+
+	return exp
+}
+
+func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType lexer.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
 }
