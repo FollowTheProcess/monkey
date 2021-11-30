@@ -62,6 +62,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.FALSE, p.parseBoolean)
 	p.registerPrefix(lexer.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(lexer.IF, p.parseIfExpression)
+	p.registerPrefix(lexer.FUNCTION, p.parseFunctionLiteral)
 
 	p.infixParseFns = make(map[lexer.TokenType]infixParseFn)
 	p.registerInfix(lexer.PLUS, p.parseInfixExpression)
@@ -100,7 +101,7 @@ func (p *Parser) Errors() []string {
 }
 
 func (p *Parser) peekError(t lexer.TokenType) {
-	msg := fmt.Sprintf("expected next lexer to be %s, got %s instead",
+	msg := fmt.Sprintf("expected next token to be %s, got %s instead",
 		t, p.peekToken.Type)
 	p.errors = append(p.errors, msg)
 }
@@ -334,6 +335,51 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	}
 
 	return block
+}
+
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	lit := &ast.FunctionLiteral{Token: p.currentToken}
+
+	if !p.expectPeek(lexer.LPAREN) {
+		return nil
+	}
+
+	lit.Parameters = p.parseFunctionParameters()
+
+	if !p.expectPeek(lexer.LBRACE) {
+		return nil
+	}
+
+	lit.Body = p.parseBlockStatement()
+
+	return lit
+}
+
+func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	identifiers := []*ast.Identifier{}
+
+	if p.peekToken.Is(lexer.RPAREN) {
+		p.nextToken()
+		return identifiers
+	}
+
+	p.nextToken()
+
+	ident := &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	for p.peekToken.Is(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		ident := &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	if !p.expectPeek(lexer.RPAREN) {
+		return nil
+	}
+
+	return identifiers
 }
 
 func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
