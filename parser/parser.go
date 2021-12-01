@@ -118,9 +118,7 @@ func (p *Parser) ParseProgram() *ast.Program {
 
 	for !p.currentToken.Is(lexer.EOF) {
 		stmt := p.parseStatement()
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-		}
+		program.Statements = append(program.Statements, stmt)
 		p.nextToken()
 	}
 
@@ -329,9 +327,8 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 
 	for !p.currentToken.Is(lexer.RBRACE) && !p.currentToken.Is(lexer.EOF) {
 		stmt := p.parseStatement()
-		if stmt != nil {
-			block.Statements = append(block.Statements, stmt)
-		}
+		block.Statements = append(block.Statements, stmt)
+
 		p.nextToken()
 	}
 
