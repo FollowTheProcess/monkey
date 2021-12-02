@@ -64,6 +64,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.IF, p.parseIfExpression)
 	p.registerPrefix(lexer.FUNCTION, p.parseFunctionLiteral)
 	p.registerPrefix(lexer.STRING, p.parseStringLiteral)
+	p.registerPrefix(lexer.LBRACKET, p.parseArrayLiteral)
 
 	p.infixParseFns = make(map[lexer.TokenType]infixParseFn)
 	p.registerInfix(lexer.PLUS, p.parseInfixExpression)
@@ -275,6 +276,38 @@ func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.currentToken, Value: p.currentToken.Is(lexer.TRUE)}
 }
 
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	array := &ast.ArrayLiteral{Token: p.currentToken}
+
+	array.Elements = p.parseExpressionList(lexer.RBRACKET)
+
+	return array
+}
+
+func (p *Parser) parseExpressionList(end lexer.TokenType) []ast.Expression {
+	list := []ast.Expression{}
+
+	if p.peekToken.Is(end) {
+		p.nextToken()
+		return list
+	}
+
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekToken.Is(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
+}
+
 func (p *Parser) parseGroupedExpression() ast.Expression {
 	p.nextToken()
 
@@ -387,33 +420,8 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	exp := &ast.CallExpression{Token: p.currentToken, Function: function}
-	exp.Arguments = p.parseCallArguments()
+	exp.Arguments = p.parseExpressionList(lexer.RPAREN)
 	return exp
-}
-
-func (p *Parser) parseCallArguments() []ast.Expression {
-	args := []ast.Expression{}
-
-	if p.peekToken.Is(lexer.RPAREN) {
-		p.nextToken()
-		return args
-	}
-
-	p.nextToken()
-
-	args = append(args, p.parseExpression(LOWEST))
-
-	for p.peekToken.Is(lexer.COMMA) {
-		p.nextToken()
-		p.nextToken()
-		args = append(args, p.parseExpression(LOWEST))
-	}
-
-	if !p.expectPeek(lexer.RPAREN) {
-		return nil
-	}
-
-	return args
 }
 
 func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
