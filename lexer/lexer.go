@@ -115,6 +115,8 @@ func (l *Lexer) NextToken() Token {
 	case '"':
 		token.Type = STRING
 		token.Literal = l.readString()
+	case ':':
+		token = newToken(COLON, l.ch)
 	case 0:
 		token.Literal = ""
 		token.Type = EOF
