@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/FollowTheProcess/monkey/eval"
+	"github.com/FollowTheProcess/monkey/compiler"
 	"github.com/FollowTheProcess/monkey/lexer"
-	"github.com/FollowTheProcess/monkey/object"
 	"github.com/FollowTheProcess/monkey/parser"
+	"github.com/FollowTheProcess/monkey/vm"
 )
 
 const PROMPT = ">> "
@@ -17,7 +17,6 @@ const PROMPT = ">> "
 // Start will start a REPL, currently only exited with ctrl + c
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	env := object.NewEnvironment()
 
 	for {
 		fmt.Fprint(out, PROMPT)
@@ -36,10 +35,23 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		evaluated := eval.Eval(program, env)
-		if evaluated != nil {
-			fmt.Fprintln(out, evaluated.Inspect())
+		// Here's the new bit, add the compiler into the mix!
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Fprintf(out, "Uh oh! This doesn't compile:\n %s\n", err)
+			continue
 		}
+
+		machine := vm.New(comp.ByteCode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Fprintf(out, "Uh oh! Can't execute the bytecode:\n %s\n", err)
+			continue
+		}
+
+		stackTop := machine.StackTop()
+		fmt.Fprintln(out, stackTop.Inspect())
 	}
 }
 
